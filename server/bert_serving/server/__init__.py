@@ -16,6 +16,7 @@ from multiprocessing.pool import Pool
 import numpy as np
 import zmq
 import zmq.decorators as zmqd
+import zmq.auth
 from termcolor import colored
 from zmq.utils import jsonapi
 
@@ -126,7 +127,26 @@ class BertServer(threading.Thread):
 
         # bind all sockets
         self.logger.info('bind all sockets')
+
+        self.logger.info('bind all sockets! %s' % (type(frontend)))
+
+        base_dir = os.path.dirname(__file__)
+        keys_dir = os.path.join(base_dir, 'certificates')
+        public_keys_dir = os.path.join(base_dir, 'public_keys')
+        secret_keys_dir = os.path.join(base_dir, 'private_keys')
+        server_secret_file = os.path.join(secret_keys_dir, "server.key_secret")
+
+        if not (os.path.exists(keys_dir) and os.path.exists(public_keys_dir) and os.path.exists(secret_keys_dir)):
+            self.logger.critical("Certificates are missing - run generate_certificates.py script first")
+            sys.exit(1)
+
+
+        server_public, server_secret = zmq.auth.load_certificate(server_secret_file)
+        frontend.curve_secretkey = server_secret
+        frontend.curve_publickey = server_public
+        frontend.curve_server = True
         frontend.bind('tcp://*:%d' % self.port)
+
         addr_front2sink = auto_bind(sink)
         addr_backend_list = [auto_bind(b) for b in backend_socks]
         self.logger.info('open %d ventilator-worker sockets' % len(addr_backend_list))
@@ -140,11 +160,14 @@ class BertServer(threading.Thread):
 
         # start the backend processes
         device_map = self._get_device_map()
+
         for idx, device_id in enumerate(device_map):
             process = BertWorker(idx, self.args, addr_backend_list, addr_sink, device_id,
                                  self.graph_path, self.bert_config)
             self.processes.append(process)
             process.start()
+
+        self.logger.info('all set, ready to serve request! %s' % device_map)
 
         # start the http-service process
         if self.args.http_port:

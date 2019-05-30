@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # Han Xiao <artex.xh@gmail.com> <https://hanxiao.github.io>
 
+import os
 import sys
 import threading
 import time
@@ -10,9 +11,14 @@ import warnings
 from collections import namedtuple
 from functools import wraps
 
+import logging
+
 import numpy as np
-import zmq
-from zmq.utils import jsonapi
+import lib.pyzmq.zmq as zmq
+
+import lib.pyzmq.zmq.auth
+
+from lib.pyzmq.zmq.utils import jsonapi
 
 __all__ = ['__version__', 'BertClient', 'ConcurrentBertClient']
 
@@ -74,9 +80,31 @@ class BertClient(object):
         :param timeout: set the timeout (milliseconds) for receive operation on the client, -1 means no timeout and wait until result returns
         """
 
+        self.logger = logging.getLogger("BertClient")
+
+        base_dir = "/Users/olegkueshov/Projects/bert-as-service"
+        keys_dir = os.path.join(base_dir, 'certificates')
+        public_keys_dir = os.path.join(base_dir, 'public_keys')
+        secret_keys_dir = os.path.join(base_dir, 'private_keys')
+
+        print(public_keys_dir, secret_keys_dir)
+
+        if not (os.path.exists(keys_dir) and os.path.exists(public_keys_dir) and os.path.exists(secret_keys_dir)):
+            self.logger.critical("Certificates are missing!")
+            sys.exit(1)
+
         self.context = zmq.Context()
         self.sender = self.context.socket(zmq.PUSH)
         self.sender.setsockopt(zmq.LINGER, 0)
+        client_secret_file = os.path.join(secret_keys_dir, "client.key_secret")
+        client_public, client_secret = zmq.auth.load_certificate(client_secret_file)
+        self.sender.curve_secretkey = client_secret
+        self.sender.curve_publickey = client_public
+        server_public_file = os.path.join(public_keys_dir, "server.key")
+        server_public, _ = pyzmq.zmq.auth.load_certificate(server_public_file)
+        self.logger.info(client_public, server_public)
+        # The client must know the server's public key to make a CURVE connection.
+        self.sender.curve_serverkey = server_public
         self.identity = identity or str(uuid.uuid4()).encode('ascii')
         self.sender.connect('tcp://%s:%d' % (ip, port))
 
@@ -136,7 +164,9 @@ class BertClient(object):
         self.context.term()
 
     def _send(self, msg, msg_len=0):
+        print(msg)
         self.request_id += 1
+        print(type(self.sender))
         self.sender.send_multipart([self.identity, msg, b'%d' % self.request_id, b'%d' % msg_len])
         self.pending_request.add(self.request_id)
         return self.request_id
@@ -233,6 +263,7 @@ class BertClient(object):
 
     @_timeout
     def encode(self, texts, blocking=True, is_tokenized=False, show_tokens=False):
+        print("check encode!")
         """ Encode a list of strings to a list of vectors
 
         `texts` should be a list of strings, each of which represents a sentence.
@@ -268,6 +299,7 @@ class BertClient(object):
         :rtype: numpy.ndarray or list[list[float]]
 
         """
+
         if is_tokenized:
             self._check_input_lst_lst_str(texts)
         else:
@@ -284,6 +316,8 @@ class BertClient(object):
                           '- disable the length-check by create a new "BertClient(check_length=False)" '
                           'when you do not want to display this warning\n'
                           '- or, start a new server with a larger "max_seq_len"' % self.length_limit)
+
+        print(jsonapi.dumps(texts))
 
         req_id = self._send(jsonapi.dumps(texts), len(texts))
         if not blocking:
