@@ -16,7 +16,6 @@ from multiprocessing.pool import Pool
 import numpy as np
 import zmq
 import zmq.decorators as zmqd
-import zmq.auth
 from zmq.auth.thread import ThreadAuthenticator
 from termcolor import colored
 from zmq.utils import jsonapi
@@ -41,7 +40,6 @@ class ServerCmd:
     @staticmethod
     def is_valid(cmd):
         return any(not k.startswith('__') and v == cmd for k, v in vars(ServerCmd).items())
-
 
 class BertServer(threading.Thread):
     def __init__(self, args):

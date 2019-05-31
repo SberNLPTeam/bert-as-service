@@ -16,7 +16,6 @@ import logging
 import numpy as np
 
 import zmq
-import zmq.auth
 
 from zmq.utils import jsonapi
 
@@ -39,7 +38,9 @@ class BertClient(object):
                  output_fmt='ndarray', show_server_config=False,
                  identity=None, check_version=True, check_length=True,
                  check_token_info=True, ignore_all_checks=False,
-                 timeout=-1, is_enc=True, certs_path="/.bert_certs"):
+                 timeout=-1, is_enc=True, read_certs_from_dir=False,
+                 client_public_key=None, client_private_key=None,
+                 server_public_key=None, certs_path="/.bert_certs"):
         """ A client object connected to a BertServer
 
         Create a BertClient that connects to a BertServer.
@@ -84,24 +85,43 @@ class BertClient(object):
 
         self.is_enc = is_enc
         self.certs_path = certs_path
+        self.read_from_dir = read_certs_from_dir
 
-        public_keys_dir = None
-        private_keys_dir = None
+        self.client_public_key = None
+        self.client_private_key = None
+        self.server_public_key = None
 
         self.context = zmq.Context()
 
         if self.is_enc:
-            base_dir = self.certs_path
-            public_keys_dir = os.path.join(base_dir, 'public_keys')
-            private_keys_dir = os.path.join(base_dir, 'private_keys')
+            if not self.read_from_dir:
+                if client_public_key is None or client_private_key is None or server_public_key is None:
+                    self.logger.critical("Certificates are missing!")
+                    sys.exit(1)
 
-            if not (os.path.exists(base_dir) and os.path.exists(public_keys_dir) and os.path.exists(private_keys_dir)):
-                self.logger.critical("Certificates are missing!")
-                sys.exit(1)
+                self.client_public_key = client_public_key
+                self.client_private_key = client_private_key
+                self.server_public_key = server_public_key
+            else:
+                base_dir = self.certs_path
+                public_keys_dir = os.path.join(base_dir, 'public_keys')
+                private_keys_dir = os.path.join(base_dir, 'private_keys')
+
+                if not (os.path.exists(base_dir) and os.path.exists(public_keys_dir) and os.path.exists(private_keys_dir)):
+                    self.logger.critical("Certificates directories are missing!")
+                    sys.exit(1)
+
+                client_secret_file = os.path.join(private_keys_dir, "client.key_secret")
+                server_public_file = os.path.join(public_keys_dir, "server.key")
+                client_public, client_secret = zmq.auth.load_certificate(client_secret_file)
+                server_public, _ = zmq.auth.load_certificate(server_public_file)
+                self.client_public_key = client_public
+                self.client_private_key = client_secret
+                self.server_public_key = server_public
 
         self.identity = identity or str(uuid.uuid4()).encode('ascii')
 
-        sockets = self._create_send_recv_sockets(public_keys_dir, private_keys_dir)
+        sockets = self._create_send_recv_sockets()
 
         self.sender = sockets["sender"]
         self.receiver = sockets["receiver"]
@@ -159,27 +179,20 @@ class BertClient(object):
         self.receiver.close()
         self.context.term()
 
-    def _create_send_recv_sockets(self, public_keys_dir: str, private_keys_dir: str):
+    def _create_send_recv_sockets(self):
         sender = self.context.socket(zmq.PUSH)
         sender.setsockopt(zmq.LINGER, 0)
         receiver = self.context.socket(zmq.SUB)
         receiver.setsockopt(zmq.LINGER, 0)
 
         if self.is_enc:
-
-            client_secret_file = os.path.join(private_keys_dir, "client.key_secret")
-            server_public_file = os.path.join(public_keys_dir, "server.key")
-            client_public, client_secret = zmq.auth.load_certificate(client_secret_file)
-            server_public, _ = zmq.auth.load_certificate(server_public_file)
-
-            sender.curve_secretkey = client_secret
-            sender.curve_publickey = client_public
-            receiver.curve_secretkey = client_secret
-            receiver.curve_publickey = client_public
-
+            sender.curve_secretkey = self.client_private_key
+            sender.curve_publickey = self.client_public_key
+            receiver.curve_secretkey = self.client_private_key
+            receiver.curve_publickey = self.client_public_key
             # The client must know the server's public key to make a CURVE connection.
-            sender.curve_serverkey = server_public
-            receiver.curve_serverkey = server_public
+            sender.curve_serverkey = self.server_public_key
+            receiver.curve_serverkey = self.server_public_key
 
         receiver.setsockopt(zmq.SUBSCRIBE, self.identity)
 
