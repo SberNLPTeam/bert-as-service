@@ -14,11 +14,11 @@ from functools import wraps
 import logging
 
 import numpy as np
-import lib.pyzmq.zmq as zmq
 
-import lib.pyzmq.zmq.auth
+import zmq
+import zmq.auth
 
-from lib.pyzmq.zmq.utils import jsonapi
+from zmq.utils import jsonapi
 
 __all__ = ['__version__', 'BertClient', 'ConcurrentBertClient']
 
@@ -39,7 +39,7 @@ class BertClient(object):
                  output_fmt='ndarray', show_server_config=False,
                  identity=None, check_version=True, check_length=True,
                  check_token_info=True, ignore_all_checks=False,
-                 timeout=-1):
+                 timeout=-1, is_enc=True, certs_path="/.bert_certs"):
         """ A client object connected to a BertServer
 
         Create a BertClient that connects to a BertServer.
@@ -82,35 +82,31 @@ class BertClient(object):
 
         self.logger = logging.getLogger("BertClient")
 
-        base_dir = "/Users/olegkueshov/Projects/bert-as-service"
-        keys_dir = os.path.join(base_dir, 'certificates')
-        public_keys_dir = os.path.join(base_dir, 'public_keys')
-        secret_keys_dir = os.path.join(base_dir, 'private_keys')
+        self.is_enc = is_enc
+        self.certs_path = certs_path
 
-        print(public_keys_dir, secret_keys_dir)
-
-        if not (os.path.exists(keys_dir) and os.path.exists(public_keys_dir) and os.path.exists(secret_keys_dir)):
-            self.logger.critical("Certificates are missing!")
-            sys.exit(1)
+        public_keys_dir = None
+        private_keys_dir = None
 
         self.context = zmq.Context()
-        self.sender = self.context.socket(zmq.PUSH)
-        self.sender.setsockopt(zmq.LINGER, 0)
-        client_secret_file = os.path.join(secret_keys_dir, "client.key_secret")
-        client_public, client_secret = zmq.auth.load_certificate(client_secret_file)
-        self.sender.curve_secretkey = client_secret
-        self.sender.curve_publickey = client_public
-        server_public_file = os.path.join(public_keys_dir, "server.key")
-        server_public, _ = pyzmq.zmq.auth.load_certificate(server_public_file)
-        self.logger.info(client_public, server_public)
-        # The client must know the server's public key to make a CURVE connection.
-        self.sender.curve_serverkey = server_public
-        self.identity = identity or str(uuid.uuid4()).encode('ascii')
-        self.sender.connect('tcp://%s:%d' % (ip, port))
 
-        self.receiver = self.context.socket(zmq.SUB)
-        self.receiver.setsockopt(zmq.LINGER, 0)
-        self.receiver.setsockopt(zmq.SUBSCRIBE, self.identity)
+        if self.is_enc:
+            base_dir = self.certs_path
+            public_keys_dir = os.path.join(base_dir, 'public_keys')
+            private_keys_dir = os.path.join(base_dir, 'private_keys')
+
+            if not (os.path.exists(base_dir) and os.path.exists(public_keys_dir) and os.path.exists(private_keys_dir)):
+                self.logger.critical("Certificates are missing!")
+                sys.exit(1)
+
+        self.identity = identity or str(uuid.uuid4()).encode('ascii')
+
+        sockets = self._create_send_recv_sockets(public_keys_dir, private_keys_dir)
+
+        self.sender = sockets["sender"]
+        self.receiver = sockets["receiver"]
+
+        self.sender.connect('tcp://%s:%d' % (ip, port))
         self.receiver.connect('tcp://%s:%d' % (ip, port_out))
 
         self.request_id = 0
@@ -163,10 +159,34 @@ class BertClient(object):
         self.receiver.close()
         self.context.term()
 
+    def _create_send_recv_sockets(self, public_keys_dir: str, private_keys_dir: str):
+        sender = self.context.socket(zmq.PUSH)
+        sender.setsockopt(zmq.LINGER, 0)
+        receiver = self.context.socket(zmq.SUB)
+        receiver.setsockopt(zmq.LINGER, 0)
+
+        if self.is_enc:
+
+            client_secret_file = os.path.join(private_keys_dir, "client.key_secret")
+            server_public_file = os.path.join(public_keys_dir, "server.key")
+            client_public, client_secret = zmq.auth.load_certificate(client_secret_file)
+            server_public, _ = zmq.auth.load_certificate(server_public_file)
+
+            sender.curve_secretkey = client_secret
+            sender.curve_publickey = client_public
+            receiver.curve_secretkey = client_secret
+            receiver.curve_publickey = client_public
+
+            # The client must know the server's public key to make a CURVE connection.
+            sender.curve_serverkey = server_public
+            receiver.curve_serverkey = server_public
+
+        receiver.setsockopt(zmq.SUBSCRIBE, self.identity)
+
+        return {"sender" : sender, "receiver" : receiver}
+
     def _send(self, msg, msg_len=0):
-        print(msg)
         self.request_id += 1
-        print(type(self.sender))
         self.sender.send_multipart([self.identity, msg, b'%d' % self.request_id, b'%d' % msg_len])
         self.pending_request.add(self.request_id)
         return self.request_id
@@ -263,7 +283,6 @@ class BertClient(object):
 
     @_timeout
     def encode(self, texts, blocking=True, is_tokenized=False, show_tokens=False):
-        print("check encode!")
         """ Encode a list of strings to a list of vectors
 
         `texts` should be a list of strings, each of which represents a sentence.
@@ -316,8 +335,6 @@ class BertClient(object):
                           '- disable the length-check by create a new "BertClient(check_length=False)" '
                           'when you do not want to display this warning\n'
                           '- or, start a new server with a larger "max_seq_len"' % self.length_limit)
-
-        print(jsonapi.dumps(texts))
 
         req_id = self._send(jsonapi.dumps(texts), len(texts))
         if not blocking:
