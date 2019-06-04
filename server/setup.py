@@ -11,9 +11,8 @@ exec(version_line)  # produce __version__
 setup(
     name='bert_serving_server',
     version=__version__,
-    description='Mapping a variable-length sentence to a fixed-length vector using BERT model (Server) with client to '
-                ' server curve encrypting',
-    url='our local repo',
+    description='Mapping a variable-length sentence to a fixed-length vector using BERT model (Server)',
+    url='https://github.com/hanxiao/bert-as-service',
     long_description=open('README.md', 'r').read(),
     long_description_content_type='text/markdown',
     author='Han Xiao',

@@ -147,16 +147,12 @@ Below shows what the server looks like while encoding:
 <p align="center"><img src=".github/server-run-demo.gif?raw=true"/></p>
 
 #### 4. Encryption and authentication
-Encrypting and authentication mechanism is povided by zmq library
+Encrypting and authentication mechanism povided by zmq library
 
-To enable encryption between client and server start server with  -with_enc or -with_encrypt flags
+To enable encryption between client and server start server specify public and private
+ keys dir by '-certs_path' or '-bert_certs_path' flags
 ```bash
-bert-serving-start -model_dir /tmp/english_L-12_H-768_A-12/ -num_worker=4 -with_enc=True
-```
-Location of public and private keys maby specified by '-certs_path' and '-bert_certs_path' flags
-```bash
-bert-serving-start -model_dir /tmp/english_L-12_H-768_A-12/ -num_worker=4 -with_enc=True 
--certs_path=your_certs_dir
+bert-serving-start -model_dir /tmp/english_L-12_H-768_A-12/ -num_worker=4 -certs_path=your_certs_dir
 ```
 your_certs_dir structure:
 
@@ -169,8 +165,8 @@ your_certs_dir structure:
 To enable authentication using client public keys on server side, use '-is_auth_req' flag and specify
 the allowed public key directories via '-pub_keys_dir' or '-allowed_pub_keys_dir' flags
 ```bash
-bert-serving-start -model_dir /tmp/english_L-12_H-768_A-12/ -num_worker=4 -with_enc=True 
--certs_path=your_certs_dir -is_auth_req=True pub_keys_dir=allowed_public_keys
+bert-serving-start -model_dir /tmp/english_L-12_H-768_A-12/ -num_worker=4 -certs_path=your_certs_dir 
+ -pub_keys_dir=allowed_public_keys
 ```
 
 allowed_public_keys structure:
@@ -186,14 +182,14 @@ Client Usage:
 
 ```python
 from bert_serving.client import BertClient
-bc = BertClient(is_enc=True, read_certs_from_dir=True, certs_path=your_certs_dir)
+bc = BertClient(certs_path=your_certs_dir)
 bc.encode(['First do it', 'then do it right', 'then do it better'])
 ```
 
 to use use BertClient with keys passed as string use:
 ```python
 from bert_serving.client import BertClient
-bc = BertClient(is_enc=True, client_public_key=client.key, client_private_key=client.key_secret,
+bc = BertClient(client_public_key=client.key, client_private_key=client.key_secret,
                 server_public_key=server.key)
 bc.encode(['First do it', 'then do it right', 'then do it better'])
 ```

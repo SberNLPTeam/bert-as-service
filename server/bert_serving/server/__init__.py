@@ -53,12 +53,8 @@ class BertServer(threading.Thread):
         self.num_concurrent_socket = max(8, args.num_worker * 2)  # optimize concurrency for multi-clients
         self.port = args.port
         self.args = args
-        self.is_enc = args.with_enc
-        self.is_auth_req = args.is_auth_req
-        if self.is_enc:
-            self.certs_path = args.certs_path
-        if self.is_auth_req:
-            self.allowed_public_keys_dir = args.pub_keys_dir
+        self.certs_path = args.certs_path
+        self.allowed_public_keys_dir = args.pub_keys_dir
         self.status_args = {k: (v if k != 'pooling_strategy' else v.value) for k, v in sorted(vars(args).items())}
         self.status_static = {
             'tensorflow_version': _tf_ver_,
@@ -133,7 +129,7 @@ class BertServer(threading.Thread):
         # bind all sockets
         self.logger.info('bind all sockets')
 
-        if self.is_enc:
+        if self.certs_path is not None:
             base_dir = self.certs_path
             public_keys_dir = os.path.join(base_dir, 'public_keys')
             secret_keys_dir = os.path.join(base_dir, 'private_keys')
@@ -141,7 +137,7 @@ class BertServer(threading.Thread):
 
             if not (os.path.exists(base_dir) and os.path.exists(public_keys_dir) and os.path.exists(secret_keys_dir)):
                 self.logger.critical("Certificates are missing - run generate_certificates.py script first")
-                sys.exit(1)
+                raise Exception("Certificates are missing")
 
             server_public, server_secret = zmq.auth.load_certificate(server_secret_file)
             frontend.curve_secretkey = server_secret
@@ -150,7 +146,11 @@ class BertServer(threading.Thread):
             self.args.server_public = server_public
             self.args.server_secret = server_secret
 
-        if self.is_auth_req:
+            if self.args.server_secret is None or self.args.server_public is None:
+                self.logger.critical("Certificates are missing - run generate_certificates.py script first")
+                raise Exception("Certificates are missing")
+
+        if self.allowed_public_keys_dir is not None:
             auth = ThreadAuthenticator(frontend.context)
             auth.start()
             # Tell authenticator to use the certificate in a directory
@@ -302,10 +302,8 @@ class BertSink(Process):
         self.max_position_embeddings = bert_config.max_position_embeddings
         self.fixed_embed_length = args.fixed_embed_length
         self.is_ready = multiprocessing.Event()
-        self.is_enc = args.with_enc
-        if self.is_enc:
-            self.server_public = args.server_public
-            self.server_secret = args.server_secret
+        self.server_public = args.server_public
+        self.server_secret = args.server_secret
 
     def close(self):
         self.logger.info('shutting down...')
@@ -325,7 +323,7 @@ class BertSink(Process):
         receiver_addr = auto_bind(receiver)
         frontend.connect(self.front_sink_addr)
 
-        if self.is_enc:
+        if self.server_secret is not None:
             sender.curve_secretkey = self.server_secret
             sender.curve_publickey = self.server_public
             sender.curve_server = True
