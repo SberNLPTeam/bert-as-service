@@ -113,12 +113,12 @@ def get_args_parser():
     group3 = parser.add_argument_group('Serving Configs',
                                        'config how server utilizes GPU/CPU resources')
 
-    group3.add_argument('-is_auth_req', type=bool, default=True)
-    group3.add_argument('-pub_keys_dir', '-allowed_pub_keys_dir', type=str, default='/root/data/.curve/')
-    group3.add_argument('-with_enc', '-with_encrypt', type=bool, default=True,
+    group3.add_argument('-with_enc', '-with_encrypt', type=bool, default=False,
                         help="enable encrypting flag")
     group3.add_argument('-certs_path', '-bert_certs_path', type=str, default="/.bert_certs",
                         help='path to server public/private key pair')
+    group3.add_argument('-is_auth_req', type=bool, default=False)
+    group3.add_argument('-pub_keys_dir', '-allowed_pub_keys_dir', type=str, default='/root/data/.curve/')
     group3.add_argument('-port', '-port_in', '-port_data', type=int, default=5555,
                         help='server port for receiving data from client')
     group3.add_argument('-port_out', '-port_result', type=int, default=5556,
