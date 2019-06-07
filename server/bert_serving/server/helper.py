@@ -115,7 +115,8 @@ def get_args_parser():
 
     group3.add_argument('-certs_path', '-bert_certs_path', type=str, default=None,
                         help='path to server public/private key pair')
-    group3.add_argument('-pub_keys_dir', '-allowed_pub_keys_dir', type=str, default=None)
+    group3.add_argument('-pub_keys_dir', '-allowed_pub_keys_dir', type=str, default=None,
+                        help='directory with allowed clients public keys')
     group3.add_argument('-port', '-port_in', '-port_data', type=int, default=5555,
                         help='server port for receiving data from client')
     group3.add_argument('-port_out', '-port_result', type=int, default=5556,
