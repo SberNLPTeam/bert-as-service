@@ -96,8 +96,8 @@ class BertClient(object):
             private_keys_dir = os.path.join(base_dir, 'private_keys')
 
             if not (os.path.exists(base_dir) and os.path.exists(public_keys_dir) and os.path.exists(private_keys_dir)):
-                self.logger.critical("There are no certificate catalogs!")
-                raise Exception("There are no certificate catalogs")
+                self.logger.critical("No certificates dirs found in %s directory" % base_dir)
+                raise Exception("No certificates dirs found in %s directory" % base_dir)
 
             client_secret_file = os.path.join(private_keys_dir, "client.key_secret")
             server_public_file = os.path.join(public_keys_dir, "server.key")
@@ -108,11 +108,7 @@ class BertClient(object):
             self.server_public_key = server_public
 
         #check certificates
-        if self.client_public_key is None or self.client_private_key is None or self.server_public_key is None:
-            if self.client_private_key is None and self.client_public_key is None and self.server_public_key is None:
-                self.logger.log("Encryption is disabled")
-            else:
-                raise Exception("Incorrect encryption configuration(some keys are missing)")
+        self.check_correctness_encryption()
 
         self.identity = identity or str(uuid.uuid4()).encode('ascii')
 
@@ -163,6 +159,21 @@ class BertClient(object):
 
             if show_server_config:
                 self._print_dict(s_status, 'server config:')
+
+    def check_correctness_encryption(self):
+        all_None = self.client_public_key is None and self.client_private_key is None\
+                    and self.server_public_key is None
+        all_not_None = self.client_public_key is not None and self.client_private_key is not None\
+                       and self.server_public_key is not None
+
+        if all_None or all_not_None:
+                message = "Encryption is disabled"
+                if all_not_None:
+                    message = "Encryption is enabled"
+                self.logger.info(message)
+        else:
+            raise Exception("Incorrect encryption configuration(some keys are missing)")
+
 
     def close(self):
         """

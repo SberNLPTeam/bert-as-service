@@ -136,8 +136,8 @@ class BertServer(threading.Thread):
             server_secret_file = os.path.join(secret_keys_dir, "server.key_secret")
 
             if not (os.path.exists(base_dir) and os.path.exists(public_keys_dir) and os.path.exists(secret_keys_dir)):
-                self.logger.critical("Certificates are missing - run generate_certificates.py script first")
-                raise Exception("Certificates are missing")
+                self.logger.critical("No certificates dirs found in %s directory" % base_dir)
+                raise Exception("No certificates dirs found in %s directory" % base_dir)
 
             server_public, server_secret = zmq.auth.load_certificate(server_secret_file)
             frontend.curve_secretkey = server_secret
@@ -147,8 +147,10 @@ class BertServer(threading.Thread):
             self.args.server_secret = server_secret
 
             if self.args.server_secret is None or self.args.server_public is None:
-                self.logger.critical("Certificates are missing - run generate_certificates.py script first")
-                raise Exception("Certificates are missing")
+                self.logger.critical("No certificates found in %s and %s directories" %
+                                     (public_keys_dir, secret_keys_dir))
+                raise Exception("No certificates found in %s and %s directories" %
+                                (public_keys_dir, secret_keys_dir))
 
         if self.allowed_public_keys_dir is not None:
             auth = ThreadAuthenticator(frontend.context)
