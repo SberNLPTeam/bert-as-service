@@ -312,8 +312,10 @@ class BertSink(Process):
         self.max_position_embeddings = bert_config.max_position_embeddings
         self.fixed_embed_length = args.fixed_embed_length
         self.is_ready = multiprocessing.Event()
-        self.server_public = args.server_public
-        self.server_secret = args.server_secret
+        self.certs_path = args.certs_path
+        if args.certs_path is not None:
+            self.server_public = args.server_public
+            self.server_secret = args.server_secret
 
     def close(self):
         self.logger.info('shutting down...')
@@ -333,7 +335,7 @@ class BertSink(Process):
         receiver_addr = auto_bind(receiver)
         frontend.connect(self.front_sink_addr)
 
-        if self.server_secret is not None:
+        if self.certs_path is not None:
             sender.curve_secretkey = self.server_secret
             sender.curve_publickey = self.server_public
             sender.curve_server = True
