@@ -66,16 +66,24 @@ class BertServer(threading.Thread):
         }
         self.processes = []
         self.logger.info('freeze, optimize and export graph, could take a while...')
-        with Pool(processes=1) as pool:
-            # optimize the graph, must be done in another process
-            from .graph import optimize_graph
-            self.graph_path, self.bert_config = pool.apply(optimize_graph, (self.args,))
-        # from .graph import optimize_graph
-        # self.graph_path = optimize_graph(self.args, self.logger)
-        if self.graph_path:
-            self.logger.info('optimized graph is stored at: %s' % self.graph_path)
+        if args.optimized_graph_path is None:
+            with Pool(processes=1) as pool:
+                # optimize the graph, must be done in another process
+                from .graph import optimize_graph
+                self.graph_path, self.bert_config = pool.apply(optimize_graph, (self.args,))
+
+                if self.graph_path:
+                    self.logger.info('optimized graph is stored at: %s' % self.graph_path)
+                else:
+                    raise FileNotFoundError('graph optimization fails and returns empty result')
         else:
-            raise FileNotFoundError('graph optimization fails and returns empty result')
+            from .graph import load_bert_config
+            self.logger.info(f"using optimized graph {args.optimized_graph_path}")
+            self.graph_path = args.optimized_graph_path
+            config_fp = os.path.join(args.model_dir, args.config_name)
+            self.logger.info(f'model config: {config_fp}')
+            self.bert_config = load_bert_config(args)
+
         self.is_ready = threading.Event()
 
     def __enter__(self):

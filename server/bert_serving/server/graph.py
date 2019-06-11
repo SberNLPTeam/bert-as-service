@@ -9,7 +9,7 @@ from termcolor import colored
 from .bert import modeling
 from .helper import import_tf, set_logger
 
-__all__ = ['PoolingStrategy', 'optimize_graph']
+__all__ = ['PoolingStrategy', 'optimize_graph', "load_bert_config"]
 
 
 class PoolingStrategy(Enum):
@@ -33,6 +33,21 @@ class PoolingStrategy(Enum):
             raise ValueError()
 
 
+def load_bert_config(args):
+    """
+    Load BERT config
+    :param args: Args has to contain model_dir and config_name
+    :return: Class BertConfig
+    """
+    config_fp = os.path.join(args.model_dir, args.config_name)
+    tf = import_tf(verbose=args.verbose)
+
+    with tf.gfile.GFile(config_fp, 'r') as f:
+        bert_config = modeling.BertConfig.from_dict(json.load(f))
+
+    return bert_config
+
+
 def optimize_graph(args, logger=None):
     if not logger:
         logger = set_logger(colored('GRAPHOPT', 'cyan'), args.verbose)
@@ -53,9 +68,7 @@ def optimize_graph(args, logger=None):
         logger.info(
             'checkpoint%s: %s' % (
             ' (override by the fine-tuned model)' if args.tuned_model_dir else '', init_checkpoint))
-        with tf.gfile.GFile(config_fp, 'r') as f:
-            bert_config = modeling.BertConfig.from_dict(json.load(f))
-
+        bert_config = load_bert_config(args)
         logger.info('build graph...')
         # input placeholders, not sure if they are friendly to XLA
         input_ids = tf.placeholder(tf.int32, (None, None), 'input_ids')
