@@ -165,6 +165,51 @@ def get_args_parser():
     return parser
 
 
+def get_optimizer_args_parser():
+    from . import __version__
+    from .graph import PoolingStrategy
+
+    parser = argparse.ArgumentParser(description='Start graph optimizing')
+
+    group1 = parser.add_argument_group('File Paths',
+                                       'config the path, checkpoint and filename of a pretrained/fine-tuned BERT model')
+    group1.add_argument('-model_dir', type=str, required=True,
+                        help='directory of a pretrained BERT model')
+    group1.add_argument('-optimized_graph_path', type=str,
+                        help='Full filename for optimized BERT graph ready for inference')
+    group1.add_argument('-tuned_model_dir', type=str,
+                        help='directory of a fine-tuned BERT model')
+    group1.add_argument('-ckpt_name', type=str, default='bert_model.ckpt',
+                        help='filename of the checkpoint file. By default it is "bert_model.ckpt", but \
+                             for a fine-tuned model the name could be different.')
+    group1.add_argument('-config_name', type=str, default='bert_config.json',
+                        help='filename of the JSON config file for BERT model.')
+    group1.add_argument('-graph_tmp_dir', type=str, default=None,
+                        help='path to graph temp file')
+
+    group2 = parser.add_argument_group('BERT Parameters',
+                                       'config how BERT model and pooling works')
+    group2.add_argument('-pooling_layer', type=int, nargs='+', default=[-2],
+                        help='the encoder layer(s) that receives pooling. \
+                        Give a list in order to concatenate several layers into one')
+    group2.add_argument('-pooling_strategy', type=PoolingStrategy.from_string,
+                        default=PoolingStrategy.REDUCE_MEAN, choices=list(PoolingStrategy),
+                        help='the pooling strategy for generating encoding vectors')
+
+    group3 = parser.add_argument_group('Serving Configs',
+                                       'config how server utilizes GPU/CPU resources')
+
+    group3.add_argument('-xla', action='store_true', default=False,
+                        help='enable XLA compiler (experimental)')
+    group3.add_argument('-fp16', action='store_true', default=False,
+                        help='use float16 precision (experimental)')
+
+    parser.add_argument('-verbose', action='store_true', default=False,
+                        help='turn on tensorflow logging for debug')
+    parser.add_argument('-version', action='version', version='%(prog)s ' + __version__)
+    return parser
+
+
 def check_tf_version():
     import tensorflow as tf
     tf_ver = tf.__version__.split('.')

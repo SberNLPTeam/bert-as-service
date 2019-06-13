@@ -41,7 +41,8 @@ setup(
     entry_points={
         'console_scripts': ['bert-serving-start=bert_serving.server.cli:main',
                             'bert-serving-benchmark=bert_serving.server.cli:benchmark',
-                            'bert-serving-terminate=bert_serving.server.cli:terminate'],
+                            'bert-serving-terminate=bert_serving.server.cli:terminate',
+                            'bert-serving-optimize=bert_serving.server.cli:optimize'],
     },
     keywords='bert nlp tensorflow machine learning sentence encoding embedding serving',
 )
