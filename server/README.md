@@ -130,7 +130,16 @@ docker run --runtime nvidia -dit -p 5555:5555 -p 5556:5556 -v $PATH_MODEL:/model
 ```
 </details>
 
-
+For industrial using we recommend pre-optimizing the graph:
+```bash
+bert-serving-optimize -model_dir /tmp/english_L-12_H-768_A-12/
+```
+After execution in model_dir folder you will find optimized_graph.pbtxt file.
+Now you can run serving:
+```bash
+bert-serving-start -model_dir /tmp/english_L-12_H-768_A-12/ -optimized_graph_path /tmp/english_L-12_H-768_A-12/optimized_graph.pbtxt
+```
+   
 #### 3. Use Client to Get Sentence Encodes
 Now you can encode sentences simply as follows:
 ```python
@@ -189,11 +198,14 @@ The best way to learn `bert-as-service` **latest API** is [reading the documenta
 bert-serving-start --help
 bert-serving-terminate --help
 bert-serving-benchmark --help
+bert-serving-optimize --help
+
 ```
 
 | Argument | Type | Default | Description |
 |--------------------|------|-------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `model_dir` | str | *Required* | folder path of the pre-trained BERT model. |
+| `optimized_graph_path` | str |(Optional)| Full filename for optimized BERT graph ready for inference |
 | `tuned_model_dir`| str |(Optional)| folder path of a fine-tuned BERT model. |
 | `ckpt_name`| str | `bert_model.ckpt` | filename of the checkpoint file. |
 | `config_name`| str | `bert_config.json` | filename of the JSON config file for BERT model. |
